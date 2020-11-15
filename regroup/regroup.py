@@ -9,6 +9,8 @@ import itertools
 import pandas as pd
 import numpy as np
 from regroup import FrameGeometry
+from cctbx import sgtbx
+from cctbx.sgtbx import subgroups
 
 def angle(v1, v2):
     """Compute angle between two vectors"""
@@ -28,6 +30,27 @@ def get_normal_vector(hkl, Astar):
     """
     return hkl@Astar.T
 
+def get_spacegroup(facet, parent_sg):
+    e_field_direction = facet
+    e_field_unit_vector = np.array(e_field_direction)/np.linalg.norm(e_field_direction)
+
+    parent = sgtbx.space_group_info(parent_sg)
+    subgrs = subgroups.subgroups(parent).groups_parent_setting()
+
+    possible = []
+    for subgroup in subgrs:
+        subgroup_info = sgtbx.space_group_info(group=subgroup)
+        valid = True
+        for op in subgroup.smx():
+            rot_mat = np.array(op.r().as_double()).reshape((3, 3))
+            valid &= np.all(rot_mat@e_field_unit_vector == e_field_unit_vector)
+
+        if valid:
+            possible.append([subgroup.n_smx(), subgroup_info.symbol_and_number(), subgroup])
+
+    possible = sorted(possible)
+    return possible[-1][1], possible[-1][0]
+
 def main():
 
     # CLI
@@ -35,7 +58,9 @@ def main():
                                      description=__doc__)
     parser.add_argument("inp", nargs="+",
                         help="Precognition geometry file (suffixed with .mccd.inp)")
+    parser.add_argument("-sg", "--spacegroup", type=int, help="Parent spacegroup")
     parser.add_argument("--hmax", default=1, help="Maximal number to include in a Miller plane", type=int)
+
     args = parser.parse_args()
 
     # Relevant Miller planes
@@ -48,9 +73,13 @@ def main():
     l_angles = []
     
     # Load geometry
+    if args.spacegroup:
+        spacegroup = args.spacegroup
+
     for inp in args.inp:
         geometry = FrameGeometry(inp)
         Astar = geometry.get_reciprocal_Amatrix()
+
         for facet in facets:
             hkl = np.array(facet)
             normal = get_normal_vector(hkl, Astar)
@@ -63,6 +92,8 @@ def main():
     df = pd.DataFrame({"Facet": l_facets, "Image": l_images, "Angle": l_angles})
     results = df.groupby("Facet").agg({"Angle":["mean", "std", "count"]})
     results.sort_values(("Angle", "mean"), inplace=True)
+    results.reset_index(inplace=True)
+    results["spacegroup"], results["n_symops"] = zip(*results.Facet.apply(get_spacegroup, parent_sg=spacegroup))
     print(results)
     
 if __name__ == "__main__":

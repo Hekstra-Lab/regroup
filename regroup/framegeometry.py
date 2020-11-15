@@ -62,7 +62,7 @@ class FrameGeometry():
 
     @spacegroup.setter 
     def spacegroup(self, value):
-        self._spacegroup = value
+        self._spacegroup = int(value)
         return
 
     @property
