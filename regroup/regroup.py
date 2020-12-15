@@ -82,6 +82,11 @@ def main():
 
         for facet in facets:
             hkl = np.array(facet)
+
+            # GH#1: Remove extra parallel Miller planes from output
+            if np.gcd.reduce(hkl) > 1:
+                continue
+            
             normal = get_normal_vector(hkl, Astar)
             theta = np.rad2deg(angle(normal, np.array([0, -1, 0])))
             l_facets.append(facet)
