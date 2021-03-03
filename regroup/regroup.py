@@ -63,7 +63,9 @@ def main():
                         help="Precognition geometry file (suffixed with .mccd.inp)")
     parser.add_argument("-sg", "--spacegroup", type=int, help="Parent spacegroup")
     parser.add_argument("--hmax", default=1, help="Maximal number to include in a Miller plane", type=int)
-
+    parser.add_argument("-ef", "--efvector", nargs=3, type=int, default=(0, -1, 0), metavar=("efx", "efy", "efz"),
+                        help="EF vector")
+    
     args = parser.parse_args()
 
     # Relevant Miller planes
@@ -91,7 +93,7 @@ def main():
                 continue
             
             normal = get_normal_vector(hkl, Astar)
-            theta = np.rad2deg(angle(normal, np.array([0, -1, 0])))
+            theta = np.rad2deg(angle(normal, np.array(args.efvector)))
             l_facets.append(facet)
             l_images.append(inp)
             l_angles.append(theta)
