@@ -30,10 +30,13 @@ def get_normal_vector(hkl, Astar):
     """
     return hkl@Astar.T
 
-def get_spacegroup(facet, parent_sg):
-    e_field_direction = facet
+def get_spacegroup(facet, parent_sg, O):
+    """
+    Get reduced symmetry spacegroup for crystal aligned on `facet`.
+    """
+    e_field_direction = np.linalg.inv(O)@(np.linalg.inv(O).T@facet)
     e_field_unit_vector = np.array(e_field_direction)/np.linalg.norm(e_field_direction)
-
+    
     parent = sgtbx.space_group_info(parent_sg)
     subgrs = subgroups.subgroups(parent).groups_parent_setting()
 
@@ -43,7 +46,7 @@ def get_spacegroup(facet, parent_sg):
         valid = True
         for op in subgroup.smx():
             rot_mat = np.array(op.r().as_double()).reshape((3, 3))
-            valid &= np.all(rot_mat@e_field_unit_vector == e_field_unit_vector)
+            valid &= np.allclose(rot_mat@e_field_unit_vector, e_field_unit_vector)
 
         if valid:
             possible.append([subgroup.n_smx(), subgroup_info.symbol_and_number(), subgroup])
@@ -93,12 +96,16 @@ def main():
             l_images.append(inp)
             l_angles.append(theta)
 
+    # Use first frame for orthogonalization matrix
+    geom = FrameGeometry(args.inp[0])
+    O = geom.get_orthogonalization_matrix().T
+    
     # Format output
     df = pd.DataFrame({"Facet": l_facets, "Image": l_images, "Angle": l_angles})
     results = df.groupby("Facet").agg({"Angle":["mean", "std", "count"]})
     results.sort_values(("Angle", "mean"), inplace=True)
     results.reset_index(inplace=True)
-    results["spacegroup"], results["n_symops"] = zip(*results.Facet.apply(get_spacegroup, parent_sg=spacegroup))
+    results["spacegroup"], results["n_symops"] = zip(*results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O))
     print(results)
     
 if __name__ == "__main__":
