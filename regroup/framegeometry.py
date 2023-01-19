@@ -358,7 +358,7 @@ class FrameGeometry():
         """
         Get missetting matrix for FrameGeometry
         """
-        return np.array(self.matrix, dtype=np.float).reshape(3, 3)
+        return np.array(self.matrix, dtype=float).reshape(3, 3)
 
     def get_goniometer_rotation_matrix(self):
         """
