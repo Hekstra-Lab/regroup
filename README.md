@@ -35,7 +35,7 @@ The user supplies a series of `.inp` files, which (among other things) describe 
 ```
 Each row corresponds to a facet of the crystal, ranked by how close the normal vector of that facet is to the electric field vector. In the above example, you can see that the electric field is very nearly normal to the (1, 1, 1) facet of the crystal. Across the 46 `.inp` files included, this facet is just ~2.2 degrees off from the EF vector with standard deviation <0.15 degrees.  
   
-For each facet, `regroup` also tells you the new spacegroup caused by symmetry breaking along the EF vector. In the case of row 4 above, the new spacegroup would be C221 with no change in unit cell or indexing. However, rows 0-3 above require the change-of-basis `(a+b,a-b,-c)`. This can be accomplished via the following code (or similar):
+For each facet, `regroup` also tells you the new spacegroup caused by symmetry breaking along the EF vector. In the case of row 4 above, the new spacegroup would be C211 with no change in unit cell or indexing. However, rows 0-3 above require the change-of-basis `(a+b,a-b,-c)`. This can be accomplished via the following code (or similar):
 ```python
 import reciprocalspaceship as rs
 import gemmi
@@ -56,7 +56,7 @@ def change_spacegroup(filename, opstring, sg='P1'):
     
     mtz = rs.read_mtz(filename)
     mtz.remove_absences(inplace=True)
-    op = gemmi.Op(opstring) # can confirm visually that this gives the intended rhombus
+    op = gemmi.Op(opstring).inverse() # can confirm visually that this gives the intended rhombus
 
     # note that this works equivalently to gemmi's "unit cell reduction" algorithm
     mtz.cell = mtz.cell.changed_basis_forward(op, False) 
