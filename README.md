@@ -13,14 +13,14 @@ pip install git+https://github.com/Hekstra-Lab/regroup.git
 
 ## Features  
 
-`regroup` requires knowledge of the experimental geometry of the crystal in the lab reference frame in order to determine the new space group based on the orientation of the crystal relative to the "pump" perturbation. Since much of our group's work is conducted at the BioCARS Laue beamline (APS 14-ID-B), this program currently only supports Precognition geometry files (`.inp` format).
+`regroup` requires knowledge of the experimental geometry of the crystal in the lab reference frame in order to determine the new space group based on the orientation of the crystal relative to the "pump" perturbation. Since much of our group's work is conducted at the BioCARS Laue beamline (APS 14-ID-B), this program currently supports Precognition geometry files (`.inp` format) or DIALS experiment files (`.expt` format). Only DIALS stills can be processed -- scans are not handled currently.
 
 If anyone is interested in support for additional file formats, please reach out by filing an [issue](https://github.com/Hekstra-Lab/regroup/issues).
 
 For a full list of options and parameters, type `regroup --help` into your terminal.
 
 ## What does it do?
-The user supplies a series of `.inp` files, which (among other things) describe the crystal orientation with an A matrix. The user also supplies the orientation of the electric field in the lab frame (via the `--ef` flag).  Given the crystal orientation and the EF direction, `regroup` walks through the possible crystal facets to see which will have a facet-normal parallel to the electric field. Then, `regroup` walks through the possible subgroups of the spacegroup to find those that will preserve the direction of the facet-normal (as an idealized electric field vector) for all of their subgroup symops.
+The user supplies a series of `.inp` files or an `.expt` file, which (among other things) describe the crystal orientation with an A matrix. The user also supplies the orientation of the electric field in the lab frame (via the `--ef` flag).  Given the crystal orientation and the EF direction, `regroup` walks through the possible crystal facets to see which will have a facet-normal parallel to the electric field. Then, `regroup` walks through the possible subgroups of the spacegroup to find those that will preserve the direction of the facet-normal (as an idealized electric field vector) for all of their subgroup symops.
 
 ## What do I do with the outputs?
 `regroup` will print out something like the following:
