@@ -49,7 +49,7 @@ class ExptList():
             raise ValueError(f"Cannot find file: {exptfile}")
 
         # Create ExperimentList from file
-        elist = ExperimentList.from_file(exptfile)
+        elist = ExperimentList.from_file(exptfile, check_format=False)
 
         # Check that experiments are stills
         assert len(elist.crystals()) == len(elist), 'ERROR: DIALS experiment file does not have stills. Please only use stills.'
