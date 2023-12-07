@@ -104,7 +104,7 @@ def main():
         Astars.extend(dials_expts.get_reciprocal_Amatrices())
         images.extend(dials_expts.get_image_filenames())
 
-    else:
+    if not dials and not precog:
         print('ERROR: File extension unrecognized. Please enter .inp or .expt files.')
         exit()
 
