@@ -4,10 +4,11 @@ Determine new space groups for analyzing pump-probe crystallography experiments
 
 ## Installation  
 
-This program relies on `sgtbx` for the hierarchical grouping of different crystallographic space groups. Currently, it does not seem that `cctbx` can be easily installed with `pip`, so this dependency must be installed separately. The following snippet should install the `regroup` command-line program to your current environment:
+This program relies on `sgtbx` for the hierarchical grouping of different crystallographic space groups. Currently, it does not seem that `cctbx` can be easily installed with `pip`, so this dependency must be installed separately. Similarly, for processing DIALS files, `dxtbx` is required, which must also be installed. The following snippet should install the `regroup` command-line program to your current environment:
 
 ```shell
 conda install -c conda-forge cctbx
+conda install -c conda-forge dxtbx
 pip install git+https://github.com/Hekstra-Lab/regroup.git
 ```
 
