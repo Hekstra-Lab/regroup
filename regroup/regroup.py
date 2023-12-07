@@ -9,6 +9,7 @@ import itertools
 import pandas as pd
 import numpy as np
 from regroup import FrameGeometry
+from regroup import ExptList
 from cctbx import sgtbx
 from cctbx.sgtbx import subgroups
 
@@ -60,7 +61,7 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
                                      description=__doc__)
     parser.add_argument("inp", nargs="+",
-                        help="Precognition geometry file (suffixed with .mccd.inp)")
+                        help="Precognition geometry file (suffixed with .mccd.inp) or DIALS experiment file (suffixed with .expt)")
     parser.add_argument("-sg", "--spacegroup", type=int, help="Parent spacegroup")
     parser.add_argument("--hmax", default=1, help="Maximal number to include in a Miller plane", type=int)
     parser.add_argument("-ef", "--efvector", nargs=3, type=int, default=(0, -1, 0), metavar=("efx", "efy", "efz"),
@@ -76,31 +77,59 @@ def main():
     l_facets = []
     l_images = []
     l_angles = []
-    
+
     # Load geometry
     if args.spacegroup:
         spacegroup = args.spacegroup
 
-    for inp in args.inp:
-        geometry = FrameGeometry(inp)
-        Astar = geometry.get_reciprocal_Amatrix()
+    # Initialize A* matrix list and filetypes
+    precog = False
+    dials = False
+    Astars = []
+    images = []
 
-        for facet in facets:
-            hkl = np.array(facet)
+    # Process Precognition files
+    if args.inp[0][-4:] == '.inp':
+        precog = True
+        for inp in args.inp:
+            geometry = FrameGeometry(inp)
+            Astars.append(geometry.get_reciprocal_Amatrix())
+            images.append(inp)
 
-            # GH#1: Remove extra parallel Miller planes from output
-            if np.gcd.reduce(hkl) > 1:
-                continue
-            
+    # Process DIALS files
+    dials_expts = None
+    if args.inp[0][-5:] == '.expt':
+        dials = True
+        dials_expts = ExptList(args.inp[0])
+        Astars.extend(dials_expts.get_reciprocal_Amatrices())
+        images.extend(dials_expts.get_image_filenames())
+
+    else:
+        print('ERROR: File extension unrecognized. Please enter .inp or .expt files.')
+        exit()
+
+    for facet in facets:
+        hkl = np.array(facet)
+
+        # GH#1: Remove extra parallel Miller planes from output
+        if np.gcd.reduce(hkl) > 1:
+            continue
+        
+        # Loop over orientation matrices
+        for i, Astar in enumerate(Astars):
             normal = get_normal_vector(hkl, Astar)
             theta = np.rad2deg(angle(normal, np.array(args.efvector)))
             l_facets.append(facet)
-            l_images.append(inp)
+            l_images.append(images[i])
             l_angles.append(theta)
 
     # Use first frame for orthogonalization matrix
-    geom = FrameGeometry(args.inp[0])
-    O = geom.get_orthogonalization_matrix().T
+    O = None # Instantiate variable
+    if precog:
+        geom = FrameGeometry(args.inp[0])
+        O = geom.get_orthogonalization_matrix().T
+    elif dials:
+        O = dials_expts.get_orthogonalization_matrix().T
     
     # Format output
     df = pd.DataFrame({"Facet": l_facets, "Image": l_images, "Angle": l_angles})
