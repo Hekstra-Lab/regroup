@@ -21,14 +21,16 @@ If anyone is interested in support for additional file formats, please reach out
 For a full list of options and parameters, type `regroup --help` into your terminal.
 
 ## Conventions
-Since `regroup` can process both DIALS experiment files and Precognition input files, it is important to make use of the correct lab frame convention. The program will automatically infer the lab frame convention given the type of file input, but the user must be sure to provide the electric field direction (via the `--ef` flag) in the correct convention. The DIALS and Precognition convention documentation can be found in the following:
+Since `regroup` can process both DIALS experiment files and Precognition input files, it is important to make use of the correct lab frame convention. The program will automatically infer the lab frame convention given the type of file input, but the user must be sure to provide the electric field direction (via the `-ef` flag) in the correct convention. The DIALS and Precognition convention documentation can be found in the following:
 
 [DIALS Convention ("Laboratory Frame" section)](https://dials.github.io/documentation/conventions.html)
 
 [Precognition Convention (Section 3.2 - Goniometer Setting)](https://biocars.uchicago.edu/wp-content/uploads/2019/06/PrecognitionUserGuide_5-0.pdf)
 
+Not that for data collected with a "vertical" electric field, the correct usage is likely `-ef 0 -1 0`; accordingly, this is the default value for `-ef` and can be omitted. If the `-ef` convention differs, it is essential that it be specified, e.g. as `-ef 1 0 0` with "horizontal" electric field.
+
 ## What does it do?
-The user supplies a series of `.inp` files or an `.expt` file, which (among other things) describe the crystal orientation with an A matrix. The user also supplies the orientation of the electric field in the lab frame (via the `--ef` flag).  Given the crystal orientation and the EF direction, `regroup` walks through the possible crystal facets to see which will have a facet-normal parallel to the electric field. Then, `regroup` walks through the possible subgroups of the spacegroup to find those that will preserve the direction of the facet-normal (as an idealized electric field vector) for all of their subgroup symops.
+The user supplies a series of `.inp` files or an `.expt` file, which (among other things) describe the crystal orientation with an A matrix. The user also supplies the orientation of the electric field in the lab frame (via the `-ef` flag).  Given the crystal orientation and the EF direction, `regroup` walks through the possible crystal facets to see which will have a facet-normal parallel to the electric field. Then, `regroup` walks through the possible subgroups of the spacegroup to find those that will preserve the direction of the facet-normal (as an idealized electric field vector) for all of their subgroup symops.
 
 ## What do I do with the outputs?
 `regroup` will print out something like the following:
