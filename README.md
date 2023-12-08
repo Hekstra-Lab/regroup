@@ -20,6 +20,9 @@ If anyone is interested in support for additional file formats, please reach out
 
 For a full list of options and parameters, type `regroup --help` into your terminal.
 
+## Conventions
+Since `regroup` can process both DIALS experiment files and Precognition input files, it is important to make use of the current lab frame convention. The program will automatically infer the lab frame convention given the type of file input, but the user must be sure to provide the electric field direction (via the `--ef` flag) in the correct convention. The DIALS and Precognition conventions are related by (-x, -y, z), where the z-axis is the beam direction. You can use this transformation to convert a known direction in one convention to the other.
+
 ## What does it do?
 The user supplies a series of `.inp` files or an `.expt` file, which (among other things) describe the crystal orientation with an A matrix. The user also supplies the orientation of the electric field in the lab frame (via the `--ef` flag).  Given the crystal orientation and the EF direction, `regroup` walks through the possible crystal facets to see which will have a facet-normal parallel to the electric field. Then, `regroup` walks through the possible subgroups of the spacegroup to find those that will preserve the direction of the facet-normal (as an idealized electric field vector) for all of their subgroup symops.
 
