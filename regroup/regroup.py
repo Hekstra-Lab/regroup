@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--hmax", default=1, help="Maximal number to include in a Miller plane", type=int)
     parser.add_argument("-ef", "--efvector", nargs=3, type=int, default=(0, -1, 0), metavar=("efx", "efy", "efz"),
                         help="EF vector")
+    parser.add_argument("--filename", default=None, help="Filename for saved output", type=str)
     
     args = parser.parse_args()
 
@@ -138,6 +139,10 @@ def main():
     results.reset_index(inplace=True)
     results["spacegroup"], results["n_symops"] = zip(*results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O))
     print(results)
+    if args.filename:
+        pd.options.display.max_rows = len(results)
+        with open(args.filename, 'w') as fname:
+            fname.write(results.__repr__())
     
 if __name__ == "__main__":
     main()
