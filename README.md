@@ -20,6 +20,9 @@ If anyone is interested in support for additional file formats, please reach out
 
 For a full list of options and parameters, type `regroup --help` into your terminal.
 
+`regroup.low_sym` converts high-symmetry MTZ files to a lower-symmetry spacegroup using a regroup change-of-basis operator, if any. This command saves the original high-symmetry HKLs as Hh, Kh, Lh, changes the unit cell and space group, and if there is a change of basis, applies the basis-change operation and checks for correct basis change.
+
+
 ## Conventions
 Since `regroup` can process both DIALS experiment files and Precognition input files, it is important to make use of the correct lab frame convention. The program will automatically infer the lab frame convention given the type of file input, but the user must be sure to provide the electric field direction (via the `-ef` flag) in the correct convention. The DIALS and Precognition convention documentation can be found in the following:
 
