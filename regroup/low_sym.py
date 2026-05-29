@@ -130,7 +130,7 @@ def mtz_regroup_basis_change(mtz_path, op_from_regroup, lowsym, verbose=True):
         
     #apply symop 
     if verbose: 
-        print(f"op for careless: ", op1.inverse())
+        print(f"op for careless: ", op1.inverse().triplet())
         #print(f"final operation: {op1}")
     try:
         mtz = mtz.apply_symop(op1)
