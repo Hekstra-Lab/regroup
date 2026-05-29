@@ -10,6 +10,8 @@ setup(
     install_requires=[
         "pandas",
         "numpy",
+        "reciprocalspaceship",
+        "gemmi",
     ],
     entry_points={
         'console_scripts': [
