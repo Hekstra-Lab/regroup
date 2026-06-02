@@ -53,8 +53,6 @@ def facet_normal_to_crystal_frame(hkl, O):
     """
     Convert a reciprocal-lattice facet normal hkl into a direct crystal-frame
     vector parallel to the real-space plane normal.
-
-    This is the same transform already used in get_spacegroup().
     """
     hkl = np.array(hkl, dtype=float)
     v = np.linalg.inv(O) @ (np.linalg.inv(O).T @ hkl)
@@ -100,7 +98,7 @@ def mean_vec(values, ndigits=4):
 
 def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None):
     """
-    Core regroup logic, usable from Python without argparse.
+    Computes A matrix and angle between vector and facet normals.
     """
 
     facets = list(itertools.product(np.arange(-hmax, hmax + 1), repeat=3))
