@@ -1,75 +1,97 @@
 #!/usr/bin/env python
 """
-Determine the angles between the crystal facets and the electric field 
+Determine the angles between the crystal facets and an input field 
 vector.
 
-Also print the electric-field vector in the crystal frame.
+Also print the field vector in the crystal frame as well as 
+the field-symmetry alignment (FSA) for each broken symop, 
+where the FSA is defined as the dot of the unit field vector
+and the symop-transformed unit field vector. 
+
+All 1D arrays are treated as 1D row vectors. 
 """
 
 import argparse
 import itertools
 import pandas as pd
+import gemmi
 import numpy as np
 from regroup import FrameGeometry
 from regroup import ExptList
+from regroup.geom_utils import *
 from cctbx import sgtbx
 from cctbx.sgtbx import subgroups
 
-
-def angle(v1, v2):
-    """Compute angle between two vectors"""
-    return np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-
-
-def get_normal_vector(hkl, Astar):
+def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None):
     """
-    Get normal vector to real-space Miller plane, hkl.
-
-    Note
-    ----
-        The normal vector to a real-space Miller plane is collinear with
-        the reciprocal dHKL vector. As such, we can use this simpler 
-        formula in the reciprocal lattice basis to get the correct 
-        orientation in real-space. For a graphical explanation of this,
-        please look at Rupp, p238.
+    Print FSA table using Gemmi operation ordering and 
+    crystal Euclidean space metric tensor.
     """
-    return hkl @ Astar.T
+    sg = gemmi.SpaceGroup(str(parent_sg))
+    ops = sg.operations().sym_ops
 
+    field = np.asarray(vec, dtype=float)
 
-def lab_vec_to_crystal(v_lab, Astar):
-    """
-    Convert a lab-frame vector into direct crystal fractional coordinates.
+    G = O.T @ O
 
-    Astar maps reciprocal fractional hkl -> lab Cartesian reciprocal vector.
-    Therefore A = inv(Astar).T maps direct fractional -> lab Cartesian,
-    and v_frac = inv(A) @ v_lab = Astar.T @ v_lab.
-    """
-    v_lab = np.array(v_lab, dtype=float)
-    v_cryst = Astar.T @ v_lab
-    return v_cryst / np.linalg.norm(v_cryst)
+    field_display = np.array(field, dtype=float)/np.linalg.norm(field)
+    
+    opnums = list(range(len(ops)))
 
+    print(file=file)
+    print(f"Space group: {parent_sg}", file=file)
+    print(f"Field vector, crystal frame: {np.round(field_display, 6)}", file=file)
+    print(file=file)
 
-def facet_normal_to_crystal_frame(hkl, O):
-    """
-    Convert a reciprocal-lattice facet normal hkl into a direct crystal-frame
-    vector parallel to the real-space plane normal.
-    """
-    hkl = np.array(hkl, dtype=float)
-    v = np.linalg.inv(O) @ (np.linalg.inv(O).T @ hkl)
-    return v / np.linalg.norm(v)
+    header = (
+        f"{'fsa':>10s}  "
+        f"{'angle_deg':>10s}  "
+        f"{'broken?':>8s}  "
+        f"{'opnum':>6s}  "
+        f"{'symop':25s}"
+    )
+    print(header, file=file)
+    print("-" * len(header), file=file)
 
+    for opnum in opnums:
+        if opnum < 0 or opnum >= len(ops):
+            print(
+                f"Skipping invalid opnum {opnum}; valid range is 0 to {len(ops) - 1}.",
+                file=file,
+            )
+            continue
 
-def fmt_vec(v, ndigits=4):
-    """Pretty-print a vector as a rounded tuple."""
-    v = np.array(v, dtype=float)
-    return tuple(np.round(v, ndigits))
+        op = ops[opnum]
+        R = gemmi_to_rot(op, den=den)
+
+        rotated = R @ field
+
+        # Metric-aware version of fsa = -v dot Rv
+        fsa = -cosine_metric(field, rotated, G)
+        angle_deg = angle_metric(field, rotated, G)
+
+        # not broken means the rotated fractional vector represents the same
+        # physical direction as the original. Use metric norm for tolerance.
+        broken = not metric_close(rotated, field, G, atol=1e-5)
+
+        print(
+            f"{fsa:10.5f}  "
+            f"{angle_deg:10.3f}  "
+            f"{str(broken):>8s}  "
+            f"{opnum:6d}  "
+            f"{op.triplet():25s}",
+            file=file,
+        )
 
 
 def get_spacegroup(facet, parent_sg, O):
     """
     Get reduced symmetry spacegroup for crystal aligned on `facet`.
     """
-    e_field_unit_vector = facet_normal_to_crystal_frame(facet, O)
+
+    #generate a fractional E field guess, on which to apply rotation matrices
+    #for checking subgroup validity. 
+    guess_e_field_unit_vector = facet_normal_to_crystal_frame(facet, O)
 
     parent = sgtbx.space_group_info(parent_sg)
     subgrs = subgroups.subgroups(parent).groups_parent_setting()
@@ -78,15 +100,17 @@ def get_spacegroup(facet, parent_sg, O):
     for subgroup in subgrs:
         subgroup_info = sgtbx.space_group_info(group=subgroup)
         valid = True
+
+        #check that all the subgroup operations preserve the vector orientation. 
         for op in subgroup.smx():
             rot_mat = np.array(op.r().as_double()).reshape((3, 3))
-            valid &= np.allclose(rot_mat @ e_field_unit_vector, e_field_unit_vector)
+            valid &= np.allclose(rot_mat @ guess_e_field_unit_vector, guess_e_field_unit_vector)
 
         if valid:
             possible.append([subgroup.n_smx(), subgroup_info.symbol_and_number(), subgroup])
 
     possible = sorted(possible)
-    return possible[-1][1], possible[-1][0]
+    return possible[-1][1], possible[-1][0], possible[-1][2]
 
 def mean_vec(values, ndigits=4):
     """
@@ -96,9 +120,25 @@ def mean_vec(values, ndigits=4):
     v = arr.mean(axis=0)
     return fmt_vec(v, ndigits=ndigits)
 
-def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None):
+def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa=False, opnums=None):
     """
     Computes A matrix and angle between vector and facet normals.
+    We deal with four coordinate frames: 
+        - the lab Cartesian frame. 
+        - the crystal Cartesian frame.
+        - the crystal fractional coordinate frame, 
+          which we utilize for symmetry breaking and visualization. 
+        - the reciprocal lattice. 
+    Given these, we rely on the following formal statements: 
+        - Astar transforms facet normals of reciprocal lattice hkls 
+          into the lab Cartesian frame.
+            - This allows us to calculate angles between the E field
+              and facet normals in the lab frame. 
+        - The metric tensor O^TO transforms reciprocal lattice points, i.e.
+          Miller plane normals, into fractional coordinates.  
+            - This allows us to rotate/translate facet normals and 
+              determine preserved/broken symmetries. 
+              
     """
 
     facets = list(itertools.product(np.arange(-hmax, hmax + 1), repeat=3))
@@ -135,7 +175,13 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None):
         raise ValueError("File extension unrecognized. Please enter .inp or .expt files.")
 
     efvector = np.array(efvector, dtype=float)
-
+    
+    if precog:
+        geom = FrameGeometry(inp[0])
+        O = geom.get_orthogonalization_matrix().T
+    elif dials:
+        O = dials_expts.get_orthogonalization_matrix().T
+        
     for facet in facets:
         hkl = np.array(facet)
 
@@ -145,19 +191,18 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None):
         for i, Astar in enumerate(Astars):
             normal = get_normal_vector(hkl, Astar)
             theta = np.rad2deg(angle(normal, efvector))
+            n_frac = facet_normal_to_crystal_frame(facet, O)
 
+            #check that Euclidean coordinate angle computation 
+            #matches fractional coordinate space.
             ef_cryst = lab_vec_to_crystal(efvector, Astar)
+            theta1 = angle_metric(ef_cryst, n_frac, O.T @ O)
+            assert np.allclose(theta, theta1, rtol=1e-2)
 
             l_facets.append(facet)
             l_images.append(images[i])
             l_angles.append(theta)
             l_ef_cryst.append(fmt_vec(ef_cryst))
-
-    if precog:
-        geom = FrameGeometry(inp[0])
-        O = geom.get_orthogonalization_matrix().T
-    elif dials:
-        O = dials_expts.get_orthogonalization_matrix().T
 
     df = pd.DataFrame(
         {
@@ -177,20 +222,31 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None):
 
     results.sort_values(("Angle", "mean"), inplace=True)
     results.reset_index(inplace=True)
+    mv = results.loc[0, "ef_crystal"][0]
+    print("Fractional coordinates of field vector:", mv)
+    results = results.drop(columns="ef_crystal", level=0)
 
     results["facet_normal_crystal"] = results.Facet.apply(
         lambda hkl: fmt_vec(facet_normal_to_crystal_frame(hkl, O))
     )
 
-    results["spacegroup"], results["n_symops"] = zip(
-        *results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O)
-    )
+    sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O).tolist()
+    results["spacegroup"] = [item[0] for item in sg_results]
+    results["n_symops"] = [item[1] for item in sg_results]
+
+
+    fsa_vec = np.array(mv)
 
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more 
         print(results)
+        if fsa:
+            print_fsa_table(spacegroup, sg_results[0][2], fsa_vec, opnums=opnums, O=O)
+
         if filename:
             with open(filename, 'w') as fname:
                 print(results, file=fname)
+                if fsa:
+                    print_fsa_table(spacegroup, sg_results[0][2], fsa_vec, opnums=opnums, O=O, file=fname)
 
     return results
 
@@ -208,7 +264,7 @@ def main():
     parser.add_argument(
         "--hmax",
         default=1,
-        help="Maximal number to include in a Miller plane",
+        help="Maximal index in candidate Miller planes",
         type=int,
     )
     parser.add_argument(
@@ -216,9 +272,20 @@ def main():
         "--efvector",
         nargs=3,
         type=float,
-        default=(0, -1, 0),
+        default=(0, 1, 0),
         metavar=("efx", "efy", "efz"),
-        help="EF vector in lab frame",
+        help="field vector in lab frame",
+    )
+    parser.add_argument(
+        "--fsa",
+        action="store_true",
+        help="Print field-symmetry alignment table for broken symops in the top-rated low-symmetry spacegroup",
+    )
+    parser.add_argument(
+        "--opnums",
+        nargs="+",
+        default=None,
+        help="FSA parent symop indices. Accepts space- or comma-separated values.",
     )
     parser.add_argument(
         "--filename",
@@ -235,6 +302,8 @@ def main():
         hmax=args.hmax,
         efvector=args.efvector,
         filename=args.filename,
+        fsa=args.fsa,
+        opnums=args.opnums,
     )
 
 if __name__ == "__main__":

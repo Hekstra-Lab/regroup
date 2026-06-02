@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name='regroup',
-    version='0.0.1',
-    author='Jack B. Greisman',
-    author_email='greisman@g.harvard.edu',
+    version='0.1.0',
+    author='Harrison K. Wang, Jack B. Greisman',
+    author_email='hwang1@g.harvard.edu',
     packages=find_packages(),
-    description='Determine new space groups for analyzing pump-probe crystallography experiments',
+    description='Space group conversion upon directional perturbation',
     install_requires=[
         "pandas",
         "numpy",
