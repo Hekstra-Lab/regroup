@@ -65,15 +65,17 @@ def _cctbx_cb_op_to_rs_op(s):
     # cctbx xyz notation is consistent with gemmi/rs. 
     if _has_any(s, "xyz"):
         return gemmi.Op(s)
+    if _has_any(s, "hkl"):
+        return gemmi.Op(s)
 
     # cctbx abc/hkl notation stores c_inv.T, while gemmi/rs store c.
-    if _has_any(s, "abc") or _has_any(s, "hkl"):
+    if _has_any(s, "abc"):
         # Parse raw rows without Gemmi's special hkl transpose.
-        raw_s = s.translate(str.maketrans({
-            "h": "a", "k": "b", "l": "c",
-            "H": "a", "K": "b", "L": "c",
-        }))
-        c = _transpose(gemmi.Op(raw_s)).inverse()
+        # raw_s = s.translate(str.maketrans({
+        #     "h": "a", "k": "b", "l": "c",
+        #     "H": "a", "K": "b", "L": "c",
+        # }))
+        c = _transpose(gemmi.Op(s)).inverse()
         return c 
     raise ValueError(f"Could not determine cctbx notation in {s!r}")
 
