@@ -52,7 +52,13 @@ def add_efvector(
     color=None,
 ):
     """
-    Add EF vector based on `obj` cell parameters in direction of Miller plane [h, k, l]
+    Add EF vector based on `obj` cell parameters in direction of Miller plane [h, k, l]. 
+
+    Example:
+    ```
+    pos = [85.2496566772461, 72.81723022460938, 80.97605895996094]
+    add_efvector("ls", -1, 1, -2, pos, name="efvector7", expansion = 8)
+    ```
     """
 
     # Get unit vector corresponding to EF direction
@@ -61,12 +67,30 @@ def add_efvector(
     print(cell.parameters)
     O = get_orthogonalization_matrix(cell)
 
-    millerplane = -1 * np.array([h, k, l], dtype=int)
-    if invert_polarity:
-        millerplane *= -1
-    v = np.linalg.inv(O).T @ (np.linalg.inv(O) @ millerplane)
-    v = v / np.linalg.norm(v)
-    print(v)
+    if isinstance(h, int) and isinstance(k, int) and isinstance(l, int):
+        millerplane = -1 * np.array([h, k, l], dtype=int)
+        if invert_polarity:
+            millerplane *= -1
+            
+
+        #Rupp p. 748, eqn. A-48 shows that the facet normal in the Euclidean crystal
+        # frame is (np.linalg.inv(O).T@millerplane).
+        v = (np.linalg.inv(O).T @ millerplane)
+        v = v / np.linalg.norm(v)
+        print(v)
+    else:
+        print("""treating hkl arguments as
+        real-space fractional coordinates, 
+        not reciprocal-space grid points.""")
+
+        fractional = -1 * np.array([h,k,l])
+        if invert_polarity:
+            fractional *= -1
+        
+        #treat as row vector. see Rupp (2018) p. 233, eqn. 5-4
+        v = fractional @ O.T
+        v = v / np.linalg.norm(v)
+        print(v)
 
     if color is None:
         if red:

@@ -21,8 +21,9 @@ from regroup import ExptList
 from regroup.geom_utils import *
 from cctbx import sgtbx
 from cctbx.sgtbx import subgroups
+from regroup.low_sym import _has_any, cctbx_cb_op_to_rs_op
 
-def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None):
+def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None, opnums=None):
     """
     Print FSA table using Gemmi operation ordering and 
     crystal Euclidean space metric tensor.
@@ -36,7 +37,12 @@ def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None):
 
     field_display = np.array(field, dtype=float)/np.linalg.norm(field)
     
-    opnums = list(range(len(ops)))
+    if opnums is None:
+        opnums = list(range(len(ops)))
+    elif isinstance(opnums, str):
+        opnums = [int(x) for x in opnums.replace(",", " ").split()]
+    else:
+        opnums = [int(x) for item in opnums for x in str(item).replace(",", " ").split()]
 
     print(file=file)
     print(f"Space group: {parent_sg}", file=file)
@@ -83,6 +89,21 @@ def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None):
             file=file,
         )
 
+def _extract_basis_change_op(symbol_and_number):
+    """
+    Extract the regroup/cctbx basis-change operator embedded in cctbx's
+    symbol_and_number() display. If no operator is present, use identity.
+    """
+    s = str(symbol_and_number)
+    if " (No." in s:
+        s = s.split(" (No.", 1)[0]
+    if "(" in s and ")" in s:
+        return s.rsplit("(", 1)[1].split(")", 1)[0].strip()
+    return "x,y,z"
+
+def _op_rot(op):
+    return np.array(op.rot, dtype=float) / float(getattr(op, "DEN", 24))
+
 
 def get_spacegroup(facet, parent_sg, O):
     """
@@ -105,12 +126,14 @@ def get_spacegroup(facet, parent_sg, O):
         for op in subgroup.smx():
             rot_mat = np.array(op.r().as_double()).reshape((3, 3))
             valid &= np.allclose(rot_mat @ guess_e_field_unit_vector, guess_e_field_unit_vector)
-
+            # is the operation above correct?
         if valid:
-            possible.append([subgroup.n_smx(), subgroup_info.symbol_and_number(), subgroup])
+            sg_symbol = subgroup_info.symbol_and_number()
+            cb_op = _extract_basis_change_op(sg_symbol)
+            possible.append([subgroup.n_smx(), sg_symbol, subgroup, cb_op])
 
     possible = sorted(possible)
-    return possible[-1][1], possible[-1][0], possible[-1][2]
+    return possible[-1][1], possible[-1][0], possible[-1][2], possible[-1][3]
 
 def mean_vec(values, ndigits=4):
     """
@@ -224,7 +247,6 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
     results.reset_index(inplace=True)
     mv = results.loc[0, "ef_crystal"][0]
     print("Fractional coordinates of field vector:", mv)
-    results = results.drop(columns="ef_crystal", level=0)
 
     results["facet_normal_crystal"] = results.Facet.apply(
         lambda hkl: fmt_vec(facet_normal_to_crystal_frame(hkl, O))
@@ -233,20 +255,35 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
     sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O).tolist()
     results["spacegroup"] = [item[0] for item in sg_results]
     results["n_symops"] = [item[1] for item in sg_results]
-
-
+    results["basis_change_op"] = [item[3] for item in sg_results]
+    
     fsa_vec = np.array(mv)
+
+    #compute and display change-of-basis op and transformed hkl.
+    best_cb_op = sg_results[0][3]
+    cb = cctbx_cb_op_to_rs_op(best_cb_op)
+    fv = results.loc[0, "Facet"][0]
+    new_fv_hkl = fv @ _op_rot(cb)
+
+    results = results.drop(columns=["ef_crystal", "basis_change_op"], level=0)
+
+    print("Best-match basis-change op:", best_cb_op)
+    print("Best-match facet:", fv)
+    print("Transformed best-match facet:", new_fv_hkl)
 
     with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more 
         print(results)
         if fsa:
-            print_fsa_table(spacegroup, sg_results[0][2], fsa_vec, opnums=opnums, O=O)
+            print_fsa_table(spacegroup, fsa_vec, O=O, opnums=opnums)
 
         if filename:
             with open(filename, 'w') as fname:
+                print("Best-match basis-change op:", best_cb_op)
+                print("Best-match facet:", fv)
+                print("Transformed best-match facet:", new_fv_hkl)
                 print(results, file=fname)
                 if fsa:
-                    print_fsa_table(spacegroup, sg_results[0][2], fsa_vec, opnums=opnums, O=O, file=fname)
+                    print_fsa_table(spacegroup, fsa_vec, O=O, opnums=opnums, file=fname)
 
     return results
 

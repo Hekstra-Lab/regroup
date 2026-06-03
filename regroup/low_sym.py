@@ -37,7 +37,7 @@ def _has_any(s, letters):
     return any(ch in letters for ch in s)
 
 
-def _cctbx_cb_op_to_rs_op(s):
+def cctbx_cb_op_to_rs_op(s):
     """
     gemmi.Op into rs.apply_symop treats hkl, xyz, and abc equivalently, 
     but cctbx does not treat these equivalently.
@@ -52,13 +52,13 @@ def _cctbx_cb_op_to_rs_op(s):
         cctbx cb_op string, e.g.
         "a-b,b-c,a+b+c"
         "a+b,a-b,-c"
-        "x+z,-x+y+z,-y+z"
         "-x+y+z,x+z+1/2,y-z"
 
     Returns
     -------
     gemmi.Op
-        op such that reciprocalspaceship applies H_new = H_old @ op.rot.
+        Op such that reciprocalspaceship apply_to_hkl performs
+        H_new = H_old @ op.rot correctly.
         Translation is not set with the phase-shift sign expected by
         reciprocalspaceship, but this can be implemented as needed. 
     """
@@ -70,11 +70,6 @@ def _cctbx_cb_op_to_rs_op(s):
 
     # cctbx abc/hkl notation stores c_inv.T, while gemmi/rs store c.
     if _has_any(s, "abc"):
-        # Parse raw rows without Gemmi's special hkl transpose.
-        # raw_s = s.translate(str.maketrans({
-        #     "h": "a", "k": "b", "l": "c",
-        #     "H": "a", "K": "b", "L": "c",
-        # }))
         c = _transpose(gemmi.Op(s)).inverse()
         return c 
     raise ValueError(f"Could not determine cctbx notation in {s!r}")
@@ -107,7 +102,7 @@ def mtz_regroup_basis_change(mtz_path, op_from_regroup, lowsym, verbose=True):
     mtz = _add_Hhs(mtz)
     if lowsym is None: 
         return mtz
-    op1 = _cctbx_cb_op_to_rs_op(op_from_regroup)
+    op1 = cctbx_cb_op_to_rs_op(op_from_regroup)
     
     #we check that unit cell scaling is correct. 
     if isinstance(lowsym, str):
