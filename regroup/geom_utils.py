@@ -30,8 +30,8 @@ def lab_vec_to_crystal(v_lab, Astar):
 
 def facet_normal_to_crystal_frame(hkl, O):
     """
-    Convert a reciprocal-lattice facet normal hkl into a fractional
-    crystal-frame vector parallel to the real-space plane normal.
+    Convert a reciprocal-lattice facet normal hkl into a direct-space (fractional coordinates)
+    vector parallel to the real-space plane normal.
     """
     hkl = np.array(hkl, dtype=float)
     v = hkl @ np.linalg.inv(O.T @ O)

@@ -326,34 +326,6 @@ class FrameGeometry():
     #-------------------------------------------------------------------#
     # Crystallographic Methods
 
-    def get_orthogonalization_matrix(self):
-        """
-        Compute real-space orthogonalization matrix from unit cell parameters.
-        """
-        a = float(self.a)
-        b = float(self.b)
-        c = float(self.c)
-        alpha = np.deg2rad(float(self.alpha))
-        beta = np.deg2rad(float(self.beta))
-        gamma = np.deg2rad(float(self.gamma))
-
-        # Compute unit cell volume
-        V = (a*b*c*np.sqrt(1 - np.cos(alpha)**2 -
-                           np.cos(beta)**2 -
-                           np.cos(gamma)**2 +
-                           2*np.cos(alpha)*np.cos(beta)*np.cos(gamma)))
-    
-        # Compute Cartesian orthogonalization matrix (Rupp, Page 746)
-        O = np.zeros((3, 3))
-        O[0, 0] = a
-        O[0, 1] = b*np.cos(gamma)
-        O[1, 1] = b*np.sin(gamma)
-        O[0, 2] = c*np.cos(beta)
-        O[1, 2] = c*(np.cos(alpha) - (np.cos(beta)*np.cos(gamma)))/np.sin(gamma)
-        O[2, 2] = V/(a*b*np.sin(gamma))
-
-        return O.T
-
     def get_missetting_matrix(self):
         """
         Get missetting matrix for FrameGeometry
@@ -405,3 +377,31 @@ class FrameGeometry():
         """
         a, b, c = self.get_realspace_Amatrix()
         return a, b, c
+
+def get_orthogonalization_matrix(a, b, c, alpha, beta, gamma):
+    """
+    Compute real-space orthogonalization matrix from unit cell parameters.
+    """
+    a = float(a)
+    b = float(b)
+    c = float(c)
+    alpha = np.deg2rad(float(alpha))
+    beta = np.deg2rad(float(beta))
+    gamma = np.deg2rad(float(gamma))
+
+    # Compute unit cell volume
+    V = (a*b*c*np.sqrt(1 - np.cos(alpha)**2 -
+                       np.cos(beta)**2 -
+                       np.cos(gamma)**2 +
+                       2*np.cos(alpha)*np.cos(beta)*np.cos(gamma)))
+
+    # Compute Cartesian orthogonalization matrix (Rupp, Page 746)
+    O = np.zeros((3, 3))
+    O[0, 0] = a
+    O[0, 1] = b*np.cos(gamma)
+    O[1, 1] = b*np.sin(gamma)
+    O[0, 2] = c*np.cos(beta)
+    O[1, 2] = c*(np.cos(alpha) - (np.cos(beta)*np.cos(gamma)))/np.sin(gamma)
+    O[2, 2] = V/(a*b*np.sin(gamma))
+
+    return O.T

@@ -17,6 +17,7 @@ import pandas as pd
 import gemmi
 import numpy as np
 from regroup import FrameGeometry
+from regroup.framegeometry import get_orthogonalization_matrix
 from regroup import ExptList
 from regroup.geom_utils import *
 from cctbx import sgtbx
@@ -163,7 +164,6 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
               determine preserved/broken symmetries. 
               
     """
-
     facets = list(itertools.product(np.arange(-hmax, hmax + 1), repeat=3))
     facets.remove((0, 0, 0))
 
@@ -295,7 +295,7 @@ def main():
     parser.add_argument(
         "inp",
         nargs="+",
-        help="Precognition geometry file, .mccd.inp, or DIALS experiment file, .expt",
+        help="Precognition geometry file, .mccd.inp, DIALS experiment file, .expt, or facet, if known",
     )
     parser.add_argument("-sg", "--spacegroup", type=int, help="Parent spacegroup")
     parser.add_argument(
@@ -338,6 +338,7 @@ def main():
         spacegroup=args.spacegroup,
         hmax=args.hmax,
         efvector=args.efvector,
+        facets=facets,
         filename=args.filename,
         fsa=args.fsa,
         opnums=args.opnums,
