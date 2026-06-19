@@ -80,7 +80,7 @@ def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None, opnums=Non
         rotated = R @ field
 
         # Metric-aware version of fsa = -v dot Rv
-        fsa = -cosine_metric(field, rotated, G)
+        fsa = cosine_metric(field, rotated, G)
         angle_deg = angle_metric(field, rotated, G)
 
         # not broken means the rotated fractional vector represents the same
@@ -100,13 +100,9 @@ def _op_rot(op):
     return np.array(op.rot, dtype=float) / float(getattr(op, "DEN", 24))
 
 
-def get_spacegroup(facet, parent_sg, O, subgroup_index=None, return_candidates=False):
+def get_spacegroup(facet, parent_sg, O, return_candidates=False):
     """
     Get reduced symmetry spacegroup for crystal aligned on `facet`.
-
-    If subgroup_index is supplied, choose that exact cctbx subgroup index, but
-    only if it preserves the field/facet vector. The returned subgroup operations
-    are in the parent setting, which is the right thing to serialize for cosets.
     """
 
     guess_e_field_unit_vector = facet_normal_to_crystal_frame(facet, O)
@@ -134,18 +130,8 @@ def get_spacegroup(facet, parent_sg, O, subgroup_index=None, return_candidates=F
     if not possible:
         raise ValueError(f"No valid subgroups found for facet {facet}")
 
-    if subgroup_index is not None:
-        matches = [item for item in possible if item[4] == subgroup_index]
-        if not matches:
-            valid_indices = ", ".join(str(item[4]) for item in possible)
-            raise ValueError(
-                f"Requested subgroup index {subgroup_index} is not valid for facet {facet}. "
-                f"Valid indices preserving the vector are: {valid_indices}"
-            )
-        chosen = matches[0]
-    else:
-        possible = sorted(possible, key=lambda item: (item[0], item[4]))
-        chosen = possible[-1]
+    possible = sorted(possible, key=lambda item: (item[0], item[4]))
+    chosen = possible[-1]
 
     result = [chosen[1], chosen[0], chosen[2], chosen[3], chosen[4], chosen[5]]
     if return_candidates:
@@ -160,7 +146,7 @@ def mean_vec(values, ndigits=4):
     v = arr.mean(axis=0)
     return fmt_vec(v, ndigits=ndigits)
 
-def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa=False, opnums=None, subgroup_index=None, export_subgroup_json=None, export_candidates_json=None):
+def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa=False, opnums=None, ideal_vector=False, export_subgroup_json=None, export_candidates_json=None):
     """
     Computes A matrix and angle between vector and facet normals.
     We deal with four coordinate frames: 
@@ -264,32 +250,33 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
     mv = results.loc[0, "ef_crystal"][0]
     print("Fractional coordinates of field vector:", mv)
 
-    results["facet_normal_crystal"] = results.Facet.apply(
-        lambda hkl: fmt_vec(facet_normal_to_crystal_frame(hkl, O))
-    )
+    # results["facet_normal_crystal"] = results.Facet.apply(
+    #     lambda hkl: fmt_vec(facet_normal_to_crystal_frame(hkl, O))
+    # )
 
-    sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O, subgroup_index=subgroup_index).tolist()
+    sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O).tolist()
     results["spacegroup"] = [item[0] for item in sg_results]
     results["n_symops"] = [item[1] for item in sg_results]
     results["basis_change_op"] = [item[3] for item in sg_results]
-    results["cctbx_subgroup_index"] = [item[4] for item in sg_results]
 
     if export_subgroup_json:
         best_facet = results.loc[0, "Facet"][0]
         best_result = get_spacegroup(
             best_facet,
             parent_sg=spacegroup,
-            O=O,
-            subgroup_index=subgroup_index,
+            O=O
         )
+
         write_subgroup_json(
             export_subgroup_json,
             parent_sg=spacegroup,
             selected_record=best_result[5],
         )
         print(f"Wrote selected subgroup JSON: {export_subgroup_json}")
-    
-    fsa_vec = np.array(mv)
+    if ideal_vector: 
+        fsa_vec = facet_normal_to_crystal_frame(best_facet, O)    
+    else:
+        fsa_vec = np.array(mv)
 
     #compute and display change-of-basis op and transformed hkl.
     best_cb_op = sg_results[0][3]
@@ -303,7 +290,7 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
     print("Best-match facet:", fv)
     print("Transformed best-match facet:", new_fv_hkl)
 
-    with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more 
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None, "display.expand_frame_repr", False):  # more 
         print(results)
         if fsa:
             print_fsa_table(spacegroup, fsa_vec, O=O, opnums=opnums)
@@ -364,6 +351,14 @@ def main():
             "for basis_change_pdb.py --child-subgroup-json."
         ),
     )
+    parser.add_argument(
+        "--ideal_vector",
+        action="store_true",
+        help=(
+            "Use the ideal electric field orientation to compute field-symmetry alignment (FSA)."
+            "defaults to using the true electric field orientation to compute FSAa."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -374,6 +369,7 @@ def main():
         efvector=args.efvector,
         filename=args.filename,
         fsa=args.fsa,
+        ideal_vector=args.ideal_vector,
         export_subgroup_json=args.export_subgroup_json,
     )
 

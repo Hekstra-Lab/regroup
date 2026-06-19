@@ -16,7 +16,8 @@ setup(
     entry_points={
         'console_scripts': [
             'regroup=regroup.regroup:main',
-            'regroup.low_sym=regroup.low_sym:main'
+            'regroup.low_sym=regroup.low_sym:main',
+            'regroup.basis_change_pdb=regroup.basis_change_pdb:main',
         ]
     }
 )
