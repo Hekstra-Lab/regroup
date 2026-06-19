@@ -326,6 +326,9 @@ class FrameGeometry():
     #-------------------------------------------------------------------#
     # Crystallographic Methods
 
+    def get_orthogonalization_matrix(self):
+        return get_orthogonalization_matrix(*self.crystal)
+
     def get_missetting_matrix(self):
         """
         Get missetting matrix for FrameGeometry

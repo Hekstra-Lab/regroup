@@ -41,7 +41,7 @@ def facet_normal_to_crystal_frame(hkl, O):
 ## HELPERS 
 
 def fmt_vec(v, ndigits=4):
-    """Pretty-print a vector as a rounded tuple."""
+    """Pretty print a vector as a rounded tuple."""
     v = np.array(v, dtype=float)
     return tuple(np.round(v, ndigits))
 
@@ -56,7 +56,7 @@ def angle(v1, v2):
 
 def dot_metric(u, v, G):
     """
-    Physical dot product between fractional-coordinate vectors u and v.
+    Dot product between fractional-coordinate vectors u and v.
     """
     u = np.asarray(u, dtype=float)
     v = np.asarray(v, dtype=float)
@@ -65,7 +65,7 @@ def dot_metric(u, v, G):
 
 def norm_metric(v, G):
     """
-    Physical norm of a fractional-coordinate vector.
+    Norm of a fractional-coordinate vector.
     """
     vv = dot_metric(v, v, G)
     if vv < 0 and abs(vv) < 1e-12:
@@ -80,15 +80,12 @@ def unit_metric(v, G):
     Normalize a fractional-coordinate vector using the physical crystal metric.
     """
     v = np.asarray(v, dtype=float)
-    n = norm_metric(v, G)
-    if n == 0:
-        raise ValueError("Vector has zero physical norm.")
-    return v / n
+    return v / norm_metric(v, G)
 
 
 def cosine_metric(u, v, G):
     """
-    Cosine of the physical angle between two fractional-coordinate vectors.
+    angle between two fractional-coordinate vectors.
     """
     cosang = dot_metric(u, v, G) / (norm_metric(u, G) * norm_metric(v, G))
     return float(np.clip(cosang, -1.0, 1.0))
@@ -96,15 +93,13 @@ def cosine_metric(u, v, G):
 
 def angle_metric(u, v, G):
     """
-    Physical angle in degrees between two fractional-coordinate vectors.
+    Angle in degrees between two fractional-coordinate vectors.
     """
     return float(np.degrees(np.arccos(cosine_metric(u, v, G))))
 
 def gemmi_to_rot(op, den=None):
     """
     Convert Gemmi symop rotation to a 3x3 float matrix.
-
-    This intentionally matches fsa_broken_symops.py.
     """
     if den is None:
         den = op.DEN if hasattr(op, "DEN") else 24

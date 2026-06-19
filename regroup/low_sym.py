@@ -95,11 +95,14 @@ def _add_Hhs(mtz_in):
     mtz.Lh = mtz.Lh.astype("MTZInt")
     return mtz
 
-def mtz_regroup_basis_change(mtz_path, op_from_regroup, lowsym, verbose=True):
+def mtz_regroup_basis_change(mtz_path, op_from_regroup, lowsym, verbose=True, merged=False):
 
     # we save copies of the high-symmetry HKLs. 
     mtz = rs.read_mtz(mtz_path)
     mtz = _add_Hhs(mtz)
+
+    if merged: 
+        mtz = mtz.hkl_to_asu().expand_to_p1()
     if lowsym is None: 
         return mtz
     op1 = cctbx_cb_op_to_rs_op(op_from_regroup)
@@ -141,7 +144,13 @@ def mtz_regroup_basis_change(mtz_path, op_from_regroup, lowsym, verbose=True):
         raise RuntimeError(
             f"old unit cell and new unit cell do not provide consistent dHKLs."
         )
-    return mtz.drop(columns=["dHKL", "dHKL_old"])
+    mtz = mtz.drop(columns=["dHKL", "dHKL_old"])
+
+    if merged: 
+        mtz = mtz.hkl_to_asu()
+        mtz = mtz.loc[~mtz.index.duplicated(keep='first')]
+    
+    return mtz
 
 
 def main():
@@ -176,6 +185,11 @@ def main():
         action="store_true",
         help="Suppress verbose cell-volume output",
     )
+    parser.add_argument(
+        "-m", "--merged",
+        action="store_true",
+        help="if merged, then the HKL indices are expanded to the low-symmetry spacegroup",
+    )
 
     args = parser.parse_args()
 
@@ -197,6 +211,7 @@ def main():
             args.op,
             args.ls_sg,
             verbose=not args.quiet,
+            merged=args.merged,
         )
         mtz.write_mtz(out)
         print(f"Wrote {out}")

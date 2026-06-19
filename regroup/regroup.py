@@ -1,6 +1,7 @@
-#!/usr/bin/env python
-"""
-Determine the angles between the crystal facets and an input field 
+#!/usr/bin/env python3
+"""Minimal regroup CLI for the PDZ3 workflow.
+
+Determine the angles between crystal facets and an input field
 vector.
 
 Also print the field vector in the crystal frame as well as 
@@ -22,7 +23,12 @@ from regroup import ExptList
 from regroup.geom_utils import *
 from cctbx import sgtbx
 from cctbx.sgtbx import subgroups
-from regroup.low_sym import _has_any, cctbx_cb_op_to_rs_op
+from regroup.low_sym import cctbx_cb_op_to_rs_op
+from regroup.write_subgroup_json import (
+    extract_basis_change_op,
+    subgroup_record,
+    write_subgroup_json,
+)
 
 def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None, opnums=None):
     """
@@ -90,51 +96,61 @@ def print_fsa_table(parent_sg, vec=None, O=None, file=None, den=None, opnums=Non
             file=file,
         )
 
-def _extract_basis_change_op(symbol_and_number):
-    """
-    Extract the regroup/cctbx basis-change operator embedded in cctbx's
-    symbol_and_number() display. If no operator is present, use identity.
-    """
-    s = str(symbol_and_number)
-    if " (No." in s:
-        s = s.split(" (No.", 1)[0]
-    if "(" in s and ")" in s:
-        return s.rsplit("(", 1)[1].split(")", 1)[0].strip()
-    return "x,y,z"
-
 def _op_rot(op):
     return np.array(op.rot, dtype=float) / float(getattr(op, "DEN", 24))
 
 
-def get_spacegroup(facet, parent_sg, O):
+def get_spacegroup(facet, parent_sg, O, subgroup_index=None, return_candidates=False):
     """
     Get reduced symmetry spacegroup for crystal aligned on `facet`.
+
+    If subgroup_index is supplied, choose that exact cctbx subgroup index, but
+    only if it preserves the field/facet vector. The returned subgroup operations
+    are in the parent setting, which is the right thing to serialize for cosets.
     """
 
-    #generate a fractional E field guess, on which to apply rotation matrices
-    #for checking subgroup validity. 
     guess_e_field_unit_vector = facet_normal_to_crystal_frame(facet, O)
 
     parent = sgtbx.space_group_info(parent_sg)
     subgrs = subgroups.subgroups(parent).groups_parent_setting()
 
     possible = []
-    for subgroup in subgrs:
+    candidate_records = []
+    for idx, subgroup in enumerate(subgrs):
         subgroup_info = sgtbx.space_group_info(group=subgroup)
         valid = True
 
-        #check that all the subgroup operations preserve the vector orientation. 
         for op in subgroup.smx():
             rot_mat = np.array(op.r().as_double()).reshape((3, 3))
             valid &= np.allclose(rot_mat @ guess_e_field_unit_vector, guess_e_field_unit_vector)
-            # is the operation above correct?
+
         if valid:
             sg_symbol = subgroup_info.symbol_and_number()
-            cb_op = _extract_basis_change_op(sg_symbol)
-            possible.append([subgroup.n_smx(), sg_symbol, subgroup, cb_op])
+            cb_op = extract_basis_change_op(sg_symbol)
+            record = subgroup_record(idx, subgroup, subgroup_info=subgroup_info, facet=facet)
+            possible.append([subgroup.n_smx(), str(sg_symbol), subgroup, cb_op, idx, record])
+            candidate_records.append(record)
 
-    possible = sorted(possible)
-    return possible[-1][1], possible[-1][0], possible[-1][2], possible[-1][3]
+    if not possible:
+        raise ValueError(f"No valid subgroups found for facet {facet}")
+
+    if subgroup_index is not None:
+        matches = [item for item in possible if item[4] == subgroup_index]
+        if not matches:
+            valid_indices = ", ".join(str(item[4]) for item in possible)
+            raise ValueError(
+                f"Requested subgroup index {subgroup_index} is not valid for facet {facet}. "
+                f"Valid indices preserving the vector are: {valid_indices}"
+            )
+        chosen = matches[0]
+    else:
+        possible = sorted(possible, key=lambda item: (item[0], item[4]))
+        chosen = possible[-1]
+
+    result = [chosen[1], chosen[0], chosen[2], chosen[3], chosen[4], chosen[5]]
+    if return_candidates:
+        result.append(candidate_records)
+    return result
 
 def mean_vec(values, ndigits=4):
     """
@@ -144,7 +160,7 @@ def mean_vec(values, ndigits=4):
     v = arr.mean(axis=0)
     return fmt_vec(v, ndigits=ndigits)
 
-def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa=False, opnums=None):
+def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa=False, opnums=None, subgroup_index=None, export_subgroup_json=None, export_candidates_json=None):
     """
     Computes A matrix and angle between vector and facet normals.
     We deal with four coordinate frames: 
@@ -252,10 +268,26 @@ def run_regroup(inp, spacegroup, hmax=1, efvector=(0, -1, 0), filename=None, fsa
         lambda hkl: fmt_vec(facet_normal_to_crystal_frame(hkl, O))
     )
 
-    sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O).tolist()
+    sg_results = results.Facet.apply(get_spacegroup, parent_sg=spacegroup, O=O, subgroup_index=subgroup_index).tolist()
     results["spacegroup"] = [item[0] for item in sg_results]
     results["n_symops"] = [item[1] for item in sg_results]
     results["basis_change_op"] = [item[3] for item in sg_results]
+    results["cctbx_subgroup_index"] = [item[4] for item in sg_results]
+
+    if export_subgroup_json:
+        best_facet = results.loc[0, "Facet"][0]
+        best_result = get_spacegroup(
+            best_facet,
+            parent_sg=spacegroup,
+            O=O,
+            subgroup_index=subgroup_index,
+        )
+        write_subgroup_json(
+            export_subgroup_json,
+            parent_sg=spacegroup,
+            selected_record=best_result[5],
+        )
+        print(f"Wrote selected subgroup JSON: {export_subgroup_json}")
     
     fsa_vec = np.array(mv)
 
@@ -319,16 +351,18 @@ def main():
         help="Print field-symmetry alignment table for broken symops in the top-rated low-symmetry spacegroup",
     )
     parser.add_argument(
-        "--opnums",
-        nargs="+",
-        default=None,
-        help="FSA parent symop indices. Accepts space- or comma-separated values.",
-    )
-    parser.add_argument(
         "--filename",
         default=None,
         help="Filename for saved output",
         type=str,
+    )
+    parser.add_argument(
+        "--export-subgroup-json",
+        default=None,
+        help=(
+            "Write the selected cctbx subgroup as JSON, including exact parent-setting symops "
+            "for basis_change_pdb.py --child-subgroup-json."
+        ),
     )
 
     args = parser.parse_args()
@@ -338,10 +372,9 @@ def main():
         spacegroup=args.spacegroup,
         hmax=args.hmax,
         efvector=args.efvector,
-        facets=facets,
         filename=args.filename,
         fsa=args.fsa,
-        opnums=args.opnums,
+        export_subgroup_json=args.export_subgroup_json,
     )
 
 if __name__ == "__main__":
