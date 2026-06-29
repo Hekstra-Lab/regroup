@@ -319,7 +319,7 @@ def main():
     parser.add_argument("-sg", "--spacegroup", type=int, help="Parent spacegroup")
     parser.add_argument(
         "--hmax",
-        default=1,
+        default=2,
         help="Maximal index in candidate Miller planes",
         type=int,
     )
